@@ -1,0 +1,130 @@
+To install Nexus Repository Manager on Ubuntu 24.04 with Nginx configured as a reverse proxy, follow these steps:
+
+These steps can also work on Ubuntu 16.04, 18, 20, 22, 24.04 (2GB Ram, 1 CPU capacity server) 
+And off-course on RHEL Family too. 
+
+Minimum Hardware Requirements:
+CPU: 2 CPU cores
+RAM: 2/4 GB of RAM
+Disk Space: 8-10 GB
+
+*Pre-requisites*
+	Java/JDK 
+
+Security groups/Port numbers
+-	8081
+-	80  
+
+Step 1: Install Java (OpenJDK)
+Nexus requires Java to run. Install OpenJDK:
+$ sudo apt update
+$ sudo apt install openjdk-11-jdk -y
+
+Verify Java installation:
+$ java -version
+
+Step 2: Create a Nexus User
+Create a user for Nexus:
+$ sudo adduser nexus
+$ sudo passwd nexus
+$ sudo usermod -aG sudo nexus
+
+Step 3: Download and Install Nexus
+Download the latest Nexus version:   
+wget https://download.sonatype.com/nexus/3/latest-unix.tar.gz
+Extract the archive:
+$ tar -xvzf latest-unix.tar.gz
+
+Move the files to /opt/:
+$ sudo mv nexus-3.* /opt/nexus
+$ sudo mv sonatype-work /opt/sonatype-work
+
+
+Step 4: Set Permissions
+Assign the correct permissions:
+$ sudo chown -R nexus:nexus /opt/nexus
+$ sudo chown -R nexus:nexus /opt/sonatype-work
+
+Step 5: Configure Nexus
+Edit the Nexus configuration file to specify the Nexus user:
+$ sudo vi /opt/nexus/bin/nexus.rc
+
+Add this line:
+run_as_user="nexus"
+
+Step 6: Create a Systemd Service for Nexus
+Create a service file for Nexus:
+$ sudo vi /etc/systemd/system/nexus.service
+
+Add the following content:
+[Unit]
+Description=Nexus Repository Manager 
+After=network.target
+
+[Service]
+Type=forking
+User=nexus
+Group=nexus
+ExecStart=/opt/nexus/bin/nexus start
+ExecStop=/opt/nexus/bin/nexus stop
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
+
+Enable and start Nexus:  
+$ sudo systemctl enable nexus
+$ sudo systemctl start nexus
+
+Verify the service is running:   
+$ sudo systemctl status nexus
+
+Step 7: Install Nginx
+Install Nginx, which will serve as the reverse proxy for Nexus:
+$ sudo apt install nginx -y
+
+Step 8: Configure Nginx as a Reverse Proxy
+Edit the Nginx configuration file:
+
+$ sudo vi /etc/nginx/sites-available/nexus
+
+Add the following content, assuming Nexus is running on localhost and Nginx will proxy traffic on port 8081:
+   
+server {
+    listen 80;
+    server_name nexus.example.com;  # Change to your domain or IP
+
+    location / {
+        proxy_pass http://localhost:8081;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+    }
+}
+
+Create a symbolic link to enable the configuration:
+
+$ sudo ln -s /etc/nginx/sites-available/nexus /etc/nginx/sites-enabled/
+
+Test the Nginx configuration:
+$ sudo nginx -t
+
+Reload Nginx:
+ 	$ sudo systemctl reload nginx
+
+
+Step 9: Open Nexus in Browser
+Nexus is now accessible at:
+http://nexus.example.com
+Replace nexus.example.com with your domain or server's public IP address.
+
+Step 10: Initial Nexus Login
+The default admin credentials for Nexus:
+•	Username: admin
+•	Password: Found in the file /opt/sonatype-work/nexus3/admin.password.
+Retrieve the password:
+     
+$ cat /opt/sonatype-work/nexus3/admin.password
+You can now log in and start using Nexus through the Nginx reverse proxy.
